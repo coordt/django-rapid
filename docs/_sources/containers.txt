@@ -1,0 +1,10 @@
+create a new storage object:
+
+so = StorageObject(container, 'relative/path/filename.txt')
+so.write(file_like_object)
+
+get a new storage object:
+
+so = StorageObject(container, 'relative/path/filename.txt')
+if so.exists:
+    so.read()
