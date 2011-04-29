@@ -168,6 +168,9 @@ class Container(models.Model):
     cdn_ttl = models.IntegerField(blank=True, null=True)
     cdn_log_retention = models.BooleanField(default=False)
     
+    class Meta:
+        unique_together = ('account', 'name')
+    
     @property
     def total_size(self):
         """

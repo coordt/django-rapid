@@ -261,7 +261,7 @@ class ContainerView(View):
         """
         account = get_object_or_404(Account, user__username=account_name)
         try:
-            container = account.container_set.get(name=container_name)
+            container = account.container_set.get(name=container_name) # pylint: disable-msg=W0612
             return HttpResponseAccepted()
         except Container.DoesNotExist:
             pass
@@ -275,8 +275,8 @@ class ContainerView(View):
                 len(urllib.quote(container_name)), 255))
         
         try:
-            path = os.path.join(settings.CONTAINER_LOCATION, container_name)
-            os.mkdir(path)
+            path = os.path.join(settings.CONTAINER_LOCATION, account_name, container_name)
+            os.makedirs(path)
             Container.objects.create(
                 name=container_name, 
                 path=path, 
