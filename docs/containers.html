@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>&lt;no title&gt; &mdash; rapid v0.1 documentation</title>
+    <title>Containers &mdash; rapid v0.1 documentation</title>
     <link rel="stylesheet" href="_static/default.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <script type="text/javascript">
@@ -30,7 +30,7 @@
 	<p>rapid v0.1 documentation</p>
 </div>
 <div id="header">
-	<div id="title"><h1><no title></h1></div>
+	<div id="title"><h1>Containers</h1></div>
 	<ul id="headerButtons">
 		<li id="toc_button"><div class="headerButton"><a href="#">Table of Contents</a></div></li>
 		<li id="page_buttons">
@@ -44,10 +44,15 @@
 <div id="sphinxsidebar">
   <div class="sphinxsidebarwrapper">
 	<ul><li class="toctree-l1"><a href="index.html">Main Page</a></li></ul>
-	<ul>
+	<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
 <li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting Started</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="">Containers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#creating-a-container-from-the-admin">Creating a container from the admin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#creating-a-container-from-the-api">Creating a container from the API</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="reference/index.html">Reference</a></li>
 </ul>
 
@@ -78,14 +83,47 @@
         <div class="bodywrapper">
           <div class="body">
             
-  <p>create a new storage object:</p>
-<p>so = StorageObject(container, &#8216;relative/path/filename.txt&#8217;)
-so.write(file_like_object)</p>
-<p>get a new storage object:</p>
-<p>so = StorageObject(container, &#8216;relative/path/filename.txt&#8217;)
-if so.exists:</p>
-<blockquote>
-<div>so.read()</div></blockquote>
+  <div class="section" id="containers">
+<h1>Containers<a class="headerlink" href="#containers" title="Permalink to this headline">¶</a></h1>
+<p>Containers are implemented as directories in the file system. There is a default storage directory to handle creating a new container via the API, however you may have containers anywhere the web server has access.</p>
+<div class="section" id="creating-a-container-from-the-admin">
+<h2>Creating a container from the admin<a class="headerlink" href="#creating-a-container-from-the-admin" title="Permalink to this headline">¶</a></h2>
+<ol class="arabic simple">
+<li>Go to the Django Admin and click &#8220;+ Add&#8221; button to the right of the Containers app.</li>
+<li>Enter a name for the account</li>
+<li>Enter a full path that is local to the server. Rapid will store all files uploaded relative to this directory. Existing files, if any, are served as if they had been uploaded via the API.</li>
+<li>Select the account that has access to this container.</li>
+<li>Save.</li>
+</ol>
+</div>
+<div class="section" id="creating-a-container-from-the-api">
+<h2>Creating a container from the API<a class="headerlink" href="#creating-a-container-from-the-api" title="Permalink to this headline">¶</a></h2>
+<ol class="arabic">
+<li><p class="first">Make sure an account has been set up. For this example, we&#8217;ll use the account <tt class="docutils literal"><span class="pre">joecool</span></tt> and create a container named <tt class="docutils literal"><span class="pre">movies</span></tt>.</p>
+</li>
+<li><p class="first">Make sure that your <a class="reference internal" href="reference/settings.html#container-location"><em>CONTAINER_LOCATION</em></a> setting is set. The example application sets it to a directory named <tt class="docutils literal"><span class="pre">storage</span></tt> within the project directory:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">CONTAINER_LOCATION</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">PROJ_ROOT</span><span class="p">,</span> <span class="s">&#39;storage&#39;</span><span class="p">)</span>
+<span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">CONTAINER_LOCATION</span><span class="p">):</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">CONTAINER_LOCATION</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Without this setting, Rapid has no idea where to store the files.</p>
+</li>
+<li><p class="first">To create the container, from the command line type:</p>
+<div class="highlight-bash"><div class="highlight"><pre>curl -X PUT -D - http://localhost:8000/v1/joecool/movies
+</pre></div>
+</div>
+<p>And you should see output like:</p>
+<div class="highlight-python"><pre>HTTP/1.0 201 CREATED
+Date: Fri, 29 Apr 2011 00:35:12 GMT
+Server: WSGIServer/0.1 Python/2.7
+Content-Type: text/html; charset=utf-8</pre>
+</div>
+<p>The directory created is at <tt class="docutils literal"><span class="pre">storage/joecool/movies/</span></tt></p>
+</li>
+</ol>
+</div>
+</div>
 
 
           </div> 
@@ -100,7 +138,7 @@ if so.exists:</p>
       <div class="clearer"></div>
     </div>
 	<div id="breadcrumbs">
-		&lt;no title&gt;
+		Containers
 		</ul>
 	</div>
 	<script type="text/javascript" charset="utf-8" src="_static/toc.js"></script>
