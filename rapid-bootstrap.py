@@ -97,10 +97,9 @@ class Logger(object):
     def fatal(self, msg, *args, **kw):
         self.log(self.FATAL, msg, *args, **kw)
     def log(self, level, msg, *args, **kw):
-        if args:
-            if kw:
-                raise TypeError(
-                    "You may give positional or keyword arguments, not both")
+        if args and kw:
+            raise TypeError(
+                "You may give positional or keyword arguments, not both")
         args = args or kw
         rendered = None
         for consumer_level, consumer in self.consumers:
@@ -111,10 +110,7 @@ class Logger(object):
                     sys.stdout.write('\n')
                     sys.stdout.flush()
                 if rendered is None:
-                    if args:
-                        rendered = msg % args
-                    else:
-                        rendered = msg
+                    rendered = msg % args if args else msg
                     rendered = ' '*self.indent + rendered
                 if hasattr(consumer, 'write'):
                     consumer.write(rendered+'\n')
@@ -139,11 +135,10 @@ class Logger(object):
         if self.stdout_level_matches(self.NOTIFY):
             if not self.in_progress_hanging:
                 # Some message has been printed out since start_progress
-                sys.stdout.write('...' + self.in_progress + msg + '\n')
-                sys.stdout.flush()
+                sys.stdout.write(f'...{self.in_progress}{msg}' + '\n')
             else:
                 sys.stdout.write(msg + '\n')
-                sys.stdout.flush()
+            sys.stdout.flush()
         self.in_progress = None
         self.in_progress_hanging = False
 
@@ -160,10 +155,14 @@ class Logger(object):
 
     def _stdout_level(self):
         """Returns the level that stdout runs at"""
-        for level, consumer in self.consumers:
-            if consumer is sys.stdout:
-                return level
-        return self.FATAL
+        return next(
+            (
+                level
+                for level, consumer in self.consumers
+                if consumer is sys.stdout
+            ),
+            self.FATAL,
+        )
 
     def level_matches(self, level, consumer_level):
         """
@@ -181,24 +180,19 @@ class Logger(object):
         >>> l.level_matches(slice(2, 3), 1)
         False
         """
-        if isinstance(level, slice):
-            start, stop = level.start, level.stop
-            if start is not None and start > consumer_level:
-                return False
-            if stop is not None or stop <= consumer_level:
-                return False
-            return True
-        else:
+        if not isinstance(level, slice):
             return level >= consumer_level
+        start, stop = level.start, level.stop
+        if start is not None and start > consumer_level:
+            return False
+        return stop is None and stop > consumer_level
 
     #@classmethod
-    def level_for_integer(cls, level):
-        levels = cls.LEVELS
+    def level_for_integer(self, level):
+        levels = self.LEVELS
         if level < 0:
             return levels[0]
-        if level >= len(levels):
-            return levels[-1]
-        return levels[level]
+        return levels[-1] if level >= len(levels) else levels[level]
 
     level_for_integer = classmethod(level_for_integer)
 
@@ -218,7 +212,7 @@ def copyfile(src, dest, symlink=True):
         logger.debug('File %s already exists', dest)
         return
     if not os.path.exists(os.path.dirname(dest)):
-        logger.info('Creating parent directories for %s' % os.path.dirname(dest))
+        logger.info(f'Creating parent directories for {os.path.dirname(dest)}')
         os.makedirs(os.path.dirname(dest))
     if symlink and hasattr(os, 'symlink'):
         logger.info('Symlinking %s', dest)
@@ -233,22 +227,19 @@ def copyfile(src, dest, symlink=True):
 def writefile(dest, content, overwrite=True):
     if not os.path.exists(dest):
         logger.info('Writing %s', dest)
-        f = open(dest, 'wb')
-        f.write(content)
-        f.close()
+        with open(dest, 'wb') as f:
+            f.write(content)
         return
     else:
-        f = open(dest, 'rb')
-        c = f.read()
-        f.close()
+        with open(dest, 'rb') as f:
+            c = f.read()
         if c != content:
             if not overwrite:
                 logger.notify('File %s exists with different content; not overwriting', dest)
                 return
             logger.notify('Overwriting %s with new content', dest)
-            f = open(dest, 'wb')
-            f.write(content)
-            f.close()
+            with open(dest, 'wb') as f:
+                f.write(content)
         else:
             logger.info('Content %s already in place', dest)
 
@@ -274,7 +265,7 @@ def _find_file(filename, dirs):
 
 def _install_req(py_executable, unzip=False, distribute=False):
     if not distribute:
-        setup_fn = 'setuptools-0.6c11-py%s.egg' % sys.version[:3]
+        setup_fn = f'setuptools-0.6c11-py{sys.version[:3]}.egg'
         project_name = 'setuptools'
         bootstrap_script = EZ_SETUP_PY
         source = None
@@ -289,7 +280,7 @@ def _install_req(py_executable, unzip=False, distribute=False):
             import pkg_resources
             if not hasattr(pkg_resources, '_distribute'):
                 location = os.path.dirname(pkg_resources.__file__)
-                logger.notify("A globally installed setuptools was found (in %s)" % location)
+                logger.notify(f"A globally installed setuptools was found (in {location})")
                 logger.notify("Use the --no-site-packages option to use distribute in "
                               "the virtualenv.")
         except ImportError:
@@ -321,7 +312,7 @@ def _install_req(py_executable, unzip=False, distribute=False):
 
     old_chdir = os.getcwd()
     if setup_fn is not None and os.path.exists(setup_fn):
-        logger.info('Using existing %s egg: %s' % (project_name, setup_fn))
+        logger.info(f'Using existing {project_name} egg: {setup_fn}')
         cmd.append(setup_fn)
         if os.environ.get('PYTHONPATH'):
             env['PYTHONPATH'] = setup_fn + os.path.pathsep + os.environ['PYTHONPATH']
@@ -336,9 +327,9 @@ def _install_req(py_executable, unzip=False, distribute=False):
             # site.py that it's in virtualenv_support
             remove_from_env.append('PYTHONPATH')
         else:
-            logger.info('No %s egg found; downloading' % project_name)
+            logger.info(f'No {project_name} egg found; downloading')
         cmd.extend(['--always-copy', '-U', project_name])
-    logger.start_progress('Installing %s...' % project_name)
+    logger.start_progress(f'Installing {project_name}...')
     logger.indent += 2
     cwd = None
     if project_name == 'distribute':
@@ -397,10 +388,7 @@ def install_pip(py_executable):
     filenames = [(os.path.basename(filename).lower(), i, filename) for i, filename in enumerate(filenames)]
     filenames.sort()
     filenames = [filename for basename, i, filename in filenames]
-    if not filenames:
-        filename = 'pip'
-    else:
-        filename = filenames[-1]
+    filename = filenames[-1] if filenames else 'pip'
     easy_install_script = 'easy_install'
     if sys.platform == 'win32':
         easy_install_script = 'easy_install-script.py'
@@ -408,10 +396,11 @@ def install_pip(py_executable):
     if filename == 'pip':
         logger.info('Installing pip from network...')
     else:
-        logger.info('Installing %s' % os.path.basename(filename))
+        logger.info(f'Installing {os.path.basename(filename)}')
     logger.indent += 2
     def _filter_setup(line):
         return filter_ez_setup(line, 'pip')
+
     try:
         call_subprocess(cmd, show_stdout=False,
                         filter_stdout=_filter_setup)
@@ -422,20 +411,48 @@ def filter_ez_setup(line, project_name='setuptools'):
     if not line.strip():
         return Logger.DEBUG
     if project_name == 'distribute':
-        for prefix in ('Extracting', 'Now working', 'Installing', 'Before',
-                       'Scanning', 'Setuptools', 'Egg', 'Already',
-                       'running', 'writing', 'reading', 'installing',
-                       'creating', 'copying', 'byte-compiling', 'removing',
-                       'Processing'):
-            if line.startswith(prefix):
-                return Logger.DEBUG
-        return Logger.DEBUG
-    for prefix in ['Reading ', 'Best match', 'Processing setuptools',
-                   'Copying setuptools', 'Adding setuptools',
-                   'Installing ', 'Installed ']:
-        if line.startswith(prefix):
-            return Logger.DEBUG
-    return Logger.INFO
+        return next(
+            (
+                Logger.DEBUG
+                for prefix in (
+                    'Extracting',
+                    'Now working',
+                    'Installing',
+                    'Before',
+                    'Scanning',
+                    'Setuptools',
+                    'Egg',
+                    'Already',
+                    'running',
+                    'writing',
+                    'reading',
+                    'installing',
+                    'creating',
+                    'copying',
+                    'byte-compiling',
+                    'removing',
+                    'Processing',
+                )
+                if line.startswith(prefix)
+            ),
+            Logger.DEBUG,
+        )
+    return next(
+        (
+            Logger.DEBUG
+            for prefix in [
+                'Reading ',
+                'Best match',
+                'Processing setuptools',
+                'Copying setuptools',
+                'Adding setuptools',
+                'Installing ',
+                'Installed ',
+            ]
+            if line.startswith(prefix)
+        ),
+        Logger.INFO,
+    )
 
 def main():
     parser = optparse.OptionParser(
@@ -521,9 +538,9 @@ def main():
         env = os.environ.copy()
         interpreter = resolve_interpreter(options.python)
         if interpreter == sys.executable:
-            logger.warn('Already using interpreter %s' % interpreter)
+            logger.warn(f'Already using interpreter {interpreter}')
         else:
-            logger.notify('Running virtualenv with interpreter %s' % interpreter)
+            logger.notify(f'Running virtualenv with interpreter {interpreter}')
             env['VIRTUALENV_INTERPRETER_RUNNING'] = 'true'
             file = __file__
             if file.endswith('.pyc'):
@@ -531,7 +548,13 @@ def main():
             popen = subprocess.Popen([interpreter, file] + sys.argv[1:], env=env)
             raise SystemExit(popen.wait())
 
+            popen = subprocess.Popen([interpreter, file] + sys.argv[1:], env=env)
+            raise SystemExit(popen.wait())
+
     if not args:
+        print 'You must provide a DEST_DIR'
+        parser.print_help()
+        sys.exit(2)
         print 'You must provide a DEST_DIR'
         parser.print_help()
         sys.exit(2)
@@ -710,19 +733,20 @@ def change_prefix(filename, dst_prefix):
             assert relpath[0] == os.sep
             relpath = relpath[1:]
             return join(dst_prefix, relpath)
-    assert False, "Filename %s does not start with any of these prefixes: %s" % \
-        (filename, prefixes)
+    assert (
+        False
+    ), f"Filename {filename} does not start with any of these prefixes: {prefixes}"
 
 def copy_required_modules(dst_prefix):
     import imp
     for modname in REQUIRED_MODULES:
         if modname in sys.builtin_module_names:
-            logger.info("Ignoring built-in bootstrap module: %s" % modname)
+            logger.info(f"Ignoring built-in bootstrap module: {modname}")
             continue
         try:
             f, filename, _ = imp.find_module(modname)
         except ImportError:
-            logger.info("Cannot import bootstrap module: %s" % modname)
+            logger.info(f"Cannot import bootstrap module: {modname}")
         else:
             if f is not None:
                 f.close()

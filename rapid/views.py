@@ -32,12 +32,14 @@ class AuthenticationView(View):
     def get(self, request):
         """Handle an authentication request"""
         
-        if 'HTTP_X_AUTH_USER' in request.META and 'HTTP_X_AUTH_KEY' in request.META:
-            username = request.META['HTTP_X_AUTH_USER']
-            authkey = request.META['HTTP_X_AUTH_KEY']
-        else:
+        if (
+            'HTTP_X_AUTH_USER' not in request.META
+            or 'HTTP_X_AUTH_KEY' not in request.META
+        ):
             return HttpResponseBadRequest()
-        
+
+        username = request.META['HTTP_X_AUTH_USER']
+        authkey = request.META['HTTP_X_AUTH_KEY']
         try:
             account = Account.objects.get(user__username=username, 
                                           auth_key=authkey)
@@ -130,42 +132,37 @@ class AccountView(View):
             response.
         """
         containers = account.container_set.all()
-        
+
         if metadata_only:
             response = HttpResponseNoContent()
             response['X-Account-Container-Count'] = len(containers)
-            total_size = 0
-            for container in containers:
-                total_size += container.total_size
+            total_size = sum(container.total_size for container in containers)
             response['X-Account-Total-Bytes-Used'] = total_size
             return response
-        
+
         if marker is not None:
             containers = containers.filter(name__gt='marker')
-        
+
         if len(containers) == 0:
             return HttpResponseNoContent()
-        
-        # If no format is specified, we only need the names. So return them 
-        # without doing the extra work of calculating additional info
+
         if format is None:
             return HttpResponse(
                 "\n".join([c.name for c in containers]), 
                 content_type="text/plain")
-        else:
-            records = []
-            for item in containers:
-                cont_rec = {
-                    'name': item.name,
-                    'count': item.file_count,
-                    'bytes': item.total_size,
-                }
-                records.append(cont_rec)
-            serializer = self.serializers.get(format, self.serializers['default'])
-            
-            return HttpResponse(
-                serializer['function'](account, records),
-                content_type=serializer['content_type'])
+        records = []
+        for item in containers:
+            cont_rec = {
+                'name': item.name,
+                'count': item.file_count,
+                'bytes': item.total_size,
+            }
+            records.append(cont_rec)
+        serializer = self.serializers.get(format, self.serializers['default'])
+
+        return HttpResponse(
+            serializer['function'](account, records),
+            content_type=serializer['content_type'])
 
 
 class ContainerView(View):
@@ -348,28 +345,27 @@ class ContainerView(View):
             container (without the need for the directory marker objects).
         """
         objs = container.storage_objects(limit, marker, prefix, path, delimiter)
-        
+
         if format is None:
             return HttpResponse(
                 "\n".join([path and o.name or o.full_name for o in objs]), 
                 content_type="text/plain")
-        else:
-            records = []
-            for item in objs:
-                cont_rec = {
-                    'name': path and item.name or item.full_name,
-                    'hash': item.hash,
-                    'bytes': item.bytes,
-                    'content_type': item.content_type,
-                    'last_modified': item.last_modified.isoformat(),
-                }
-                records.append(cont_rec)
-            serializer = self.serializers.get(format, 
-                                              self.serializers['default'])
-            
-            return HttpResponse(
-                serializer['function'](container, records),
-                content_type=serializer['content_type'])
+        records = []
+        for item in objs:
+            cont_rec = {
+                'name': path and item.name or item.full_name,
+                'hash': item.hash,
+                'bytes': item.bytes,
+                'content_type': item.content_type,
+                'last_modified': item.last_modified.isoformat(),
+            }
+            records.append(cont_rec)
+        serializer = self.serializers.get(format, 
+                                          self.serializers['default'])
+
+        return HttpResponse(
+            serializer['function'](container, records),
+            content_type=serializer['content_type'])
 
 
 class ObjectView(View):

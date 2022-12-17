@@ -12,10 +12,14 @@ def read_file(filename):
     
 def get_readme():
     """Return the README file contents. Supports text,rst, and markdown"""
-    for name in ('README','README.rst','README.md'):
-        if os.path.exists(name):
-            return read_file(name)
-    return ''
+    return next(
+        (
+            read_file(name)
+            for name in ('README', 'README.rst', 'README.md')
+            if os.path.exists(name)
+        ),
+        '',
+    )
 
 # Use the docstring of the __init__ file to be the description
 DESC = " ".join(__import__('rapid').__doc__.splitlines()).strip()

@@ -33,14 +33,11 @@ class StorageObject(object):
             head, tail = os.path.split(self.path)
             stat_info = os.stat(self.path)
             self.isdir = os.path.isdir(self.path)
-            if self.isdir:
-                self.bytes = 0
-            else:
-                self.bytes = stat_info[7]
+            self.bytes = 0 if self.isdir else stat_info[7]
             self.last_modified = datetime.datetime.fromtimestamp(stat_info[9])
             if tail:
                 self.name = tail
-            elif head and not tail:
+            elif head:
                 self.name = head.split('/')[-1]
             self.full_name = self.path.replace(self.container.path, '', 1)
     
@@ -53,15 +50,12 @@ class StorageObject(object):
         checksum = md5()
         fobj = None
         try:
-            try:
-                fobj = open(self.path)
-                buff = fobj.read(4096)
-                while buff:
-                    checksum.update(buff)
-                    buff = fobj.read(4096)
-                fobj.seek(0)
-            except IOError:
-                pass
+            fobj = open(self.path)
+            while buff := fobj.read(4096):
+                checksum.update(buff)
+            fobj.seek(0)
+        except IOError:
+            pass
         finally:
             if fobj:
                 fobj.close()
@@ -118,10 +112,7 @@ class StorageObject(object):
         output = ''
         try:
             thefile = open(self.path)
-            if num_bytes is not None:
-                output = thefile.read(num_bytes)
-            else:
-                output = thefile.read()
+            output = thefile.read(num_bytes) if num_bytes is not None else thefile.read()
         finally:
             thefile.close()
         return output
@@ -188,10 +179,9 @@ class Container(models.Model):
         """
         Recursively count the number of files within a path
         """
-        total_count = 0
-        for dirpath, dirnames, filenames in os.walk(self.path):
-            total_count += len(filenames)
-        return total_count
+        return sum(
+            len(filenames) for dirpath, dirnames, filenames in os.walk(self.path)
+        )
     
     def storage_objects(self, limit=10000, marker=None, prefix='', path=None, 
                         delimiter=''):
@@ -231,12 +221,12 @@ class Container(models.Model):
             prefix = ''
         if marker and marker > prefix:
             marker_path = os.path.join(self.path, marker)
-            start_path = os.path.dirname(marker_path) + '/'
+            start_path = f'{os.path.dirname(marker_path)}/'
         else:
             start_path = prefix and os.path.join(self.path, prefix) or self.path
             marker_path = start_path
         results = []
-        
+
         for dirpath, dirnames, filenames in os.walk(start_path, topdown=False):
             if len(results) >= limit:
                 break
